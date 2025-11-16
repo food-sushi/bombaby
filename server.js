@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
-import path from "path";
 import cookieParser from "cookie-parser";
+import path from "path";
 import { fileURLToPath } from "url";
 
 const app = express();
@@ -9,64 +9,50 @@ app.use(cors());
 app.use(express.json());
 app.use(cookieParser());
 
-// Fix ES module file paths
+// Path fix
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// -------------------------------------------------
-// 1️⃣ PROTECTION MIDDLEWARE
-// -------------------------------------------------
+// 0️⃣ Access Protection Middleware
 app.use((req, res, next) => {
-  // Always allow static files (CSS, JS, images, fonts, etc.)
-  if (req.path.match(/\.(css|js|png|jpg|jpeg|gif|svg|ico|webp|json|txt|mp4|mp3|woff|woff2|ttf|otf)$/i)) {
+
+  // Always allow loader API
+  if (req.path.startsWith("/frontend-loader")) return next();
+
+  // Always allow static assets
+  if (
+    req.path.startsWith("/css") ||
+    req.path.startsWith("/js") ||
+    req.path.startsWith("/images") ||
+    req.path.startsWith("/assets")
+  ) return next();
+
+  // Allow only if loader flag exists
+  if (req.query.loader === "true") {
     return next();
   }
 
-  // Allow loader API
-  if (req.path.startsWith("/frontend-loader")) {
-    return next();
-  }
-
-  // Check if user is authorized via header or cookie
-  const fromLoader =
-    req.headers["x-from-loader"] === "true" ||
-    req.cookies.fromLoader === "true";
-
-  // If not authorized → block access
-  if (!fromLoader) {
-    return res.status(403).send(`
-      <h2>403 Access Restricted</h2>
-      <p>You cannot open this website directly.</p>
-    `);
-  }
-
-  next();
+  return res
+    .status(403)
+    .send("<h2>403 - Access Restricted</h2><p>Not allowed directly.</p>");
 });
 
-// -------------------------------------------------
-// 2️⃣ SERVE STATIC WEBSITE FROM /public
-// -------------------------------------------------
+// 1️⃣ Serve Static Website
 app.use(express.static(path.join(__dirname, "public")));
 
-// -------------------------------------------------
-// 3️⃣ FRONTEND LOADER API
-// -------------------------------------------------
+// 2️⃣ Loader API
 app.get("/frontend-loader", (req, res) => {
-  const code = `
-    console.log("Loaded through secure loader");
-    document.cookie = "fromLoader=true; path=/;";
-  `;
-  
-  res.json({ allowed: true, code });
+  res.json({
+    allowed: true,
+    code: "console.log('Loaded through loader');"
+  });
 });
 
-// -------------------------------------------------
-// 4️⃣ FALLBACK ROUTE (SERVES index.html FOR ANY HTML PATH)
-// -------------------------------------------------
+// 3️⃣ Fallback to index.html
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// -------------------------------------------------
+// Start
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Server running on port " + PORT));
+app.listen(PORT, () => console.log("Server running on " + PORT));
